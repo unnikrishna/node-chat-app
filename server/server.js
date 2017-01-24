@@ -3,55 +3,65 @@ const http = require('http');
 const express = require('express');
 const socketIO = require('socket.io');
 
-const {generateMessage, generateLocationMessage} = require('./utils/message');
-const {isRealString} = require('./utils/validation');
-const {Users} = require('./utils/users');
-
-const publicPath = path.join(__dirname, '../public');
 const port = process.env.PORT || 3300;
+
+const {generateMessage,generateLocationMessage} = require('./utils/message.js');
+const {isRealString} = require('./utils/validate.js')
+const {Users} = require('./utils/users.js');
+
 var app = express();
+var publicPath = path.join(__dirname, '../public');
 var server = http.createServer(app);
 var io = socketIO(server);
 var users = new Users();
 
 app.use(express.static(publicPath));
 
-io.on('connection', (socket) => {
-  console.log('New user connected');
+io.on('connection',(socket)=>{
+  console.log('Connected to the user');
 
-  socket.on('join', (params, callback) => {
-    if (!isRealString(params.name) || !isRealString(params.room)) {
-      return callback('Name and room name are required.');
+  socket.on('join', (param, callback)=>{
+    if(!isRealString(param.name) || !isRealString(param.room)){
+      return callback('name and room are required');
     }
-
-    socket.join(params.room);
+    socket.join(param.room);
     users.removeUser(socket.id);
-    users.addUser(socket.id, params.name, params.room);
+    users.addUser(socket.id, param.name, param.room);
 
-    io.to(params.room).emit('updateUserList', users.getUserList(params.room));
-    socket.emit('newMessage', generateMessage('Admin', 'Welcome to the chat app'));
-    socket.broadcast.to(params.room).emit('newMessage', generateMessage('Admin', `${params.name} has joined.`));
+    io.to(param.room).emit('updateUserList', users.getUserList(param.room));
+    socket.emit('newMessage',generateMessage('Admin', 'welcome to chat app'));
+    socket.broadcast.to(param.room).emit('newMessage',generateMessage('Admin', `${param.name} has joined`));
     callback();
-  });
+  })
 
-  socket.on('createMessage', (message, callback) => {
+  socket.on('createMessage',(message,callback)=>{
     var user = users.getUser(socket.id);
-
-    if (user && isRealString(message.text)) {
-      io.to(user.room).emit('newMessage', generateMessage(user.name, message.text));
+    if(user && isRealString(message.text)){
+      io.to(user.room).emit('newMessage',generateMessage(user.name, message.text));
     }
-
-    callback();
+    callback('This is from the server: New message');
   });
 
-  socket.on('createLocationMessage', (coords) => {
+  socket.on('createlocation',(coords,callback)=>{
+      console.log("coords : ",coords);
     var user = users.getUser(socket.id);
-
-    if (user) {
-      io.to(user.room).emit('newLocationMessage', generateLocationMessage(user.name, coords.latitude, coords.longitude));
+    if(user){
+      io.to(user.room).emit('newLocationMessage',generateLocationMessage(user.name, coords.latitude, coords.longitude));;
     }
+    // io.emit('newLocationMessage',generateLocationMessage(coords.latitude, coords.longitude));
+    callback('This is from the server:: Geo location');
   });
 
+  // socket.on('disconnect',()=>{
+  //   console.log("user disconnected from the network hihi");
+  //   socket.emit('newMessage',generateMessage('Admin', 'goodbye to chat app'));
+  //   console.log(`socket id ${socket.id}`);
+  //   var user = users.removeUser(socket.id);
+  //   if(user){
+  //     io.to(user.room).emit('updateUserList', users.getUserList(user.room));
+  //     io.to(user.room).emit('newMessage',generateMessage('Admin', `${user.name} has joined`));
+  //   }
+  // })
   socket.on('disconnect', () => {
     var user = users.removeUser(socket.id);
 
@@ -60,8 +70,9 @@ io.on('connection', (socket) => {
       io.to(user.room).emit('newMessage', generateMessage('Admin', `${user.name} has left.`));
     }
   });
-});
+})
 
-server.listen(port, () => {
-  console.log(`Server is up on ${port}`);
+
+server.listen(port,()=>{
+  console.log('server loading in ',port);
 });
